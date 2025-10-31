@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Triage</title>
+    <!-- (MODIFIED) Stethoscope SVG Favicon -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M30,15 a10,10 0 0 0 -20,0 v15 h10 v-15 M70,15 a10,10 0 0 1 20,0 v15 h-10 v-15 M30,15 v40 a20,20 0 1 0 40,0 v-40' fill='none' stroke='%232563eb' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='50' cy='75' r='15' fill='white' stroke='%232563eb' stroke-width='6'/%3E%3Ccircle cx='50' cy='75' r='5' fill='%232563eb'/%3E%3C/svg%3E" type="image/svg+xml">
+    <!-- 1. Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 2. PapaParse (CSV Parsing Library) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <!-- 3. (REMOVED) html2pdf library -->
+    <style>
+        /* Custom styles for the file drop zone */
+        #drop-zone {
+            border: 2px dashed #cbd5e0;
+            transition: all 0.3s ease;
+        }
+        #drop-zone.drag-over {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+        /* (REMOVED) .pdf-render-source style */
+    </style>
+</head>
+<body class="bg-gray-100 font-sans antialiased">
+
+    <div class="container mx-auto p-4 sm:p-8 max-w-3xl">
+        <div class="bg-white rounded-2xl shadow-xl p-6 sm:p-10">
+            
+            <header class="text-center mb-8">
+                <!-- (MODIFIED) Title and subtitle -->
+                <h1 class="text-3xl sm:text-4xl font-bold text-gray-800">Triage</h1>
+                <p class="text-gray-600 mt-2">Student Priority Report Generator</p>
+            </header>
+
+            <!-- Step 1: Upload -->
+            <div class="mb-6">
+                <label class="block text-lg font-semibold text-gray-700 mb-2">1. Upload Files</label>
+                <p class="text-sm text-gray-500 mb-3">CSV files must contain: <code class="bg-gray-200 p-1 rounded text-xs">student_Id</code>, <code class="bg-gray-200 p-1 rounded text-xs">Student_FirstName</code>, <code class="bg-gray-200 p-1 rounded text-xs">Student_LastName</code>, <code class="bg-gray-200 p-1 rounded text-xs">course_code</code>, and <code class="bg-gray-200 p-1 rounded text-xs">markingPeriod_Average</code>.</p>
+                
+                <div id="drop-zone" class="relative rounded-lg p-10 text-center cursor-pointer bg-gray-50 hover:bg-gray-100">
+                    <input type="file" id="file-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept=".csv" multiple>
+                    <div class="flex flex-col items-center justify-center space-y-3 pointer-events-none">
+                        <svg class="w-12 h-12 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l-3 3m3-3l3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+                        </svg>
+                        <p class="text-gray-600">
+                            <span class="font-semibold text-blue-600">Click to upload</span> or drag and drop
+                        </p>
+                        <p class="text-xs text-gray-500">CSV files only</p>
+                    </div>
+                </div>
+                <div id="file-list" class="mt-4 text-sm text-gray-700"></div>
+            </div>
+
+            <!-- Step 2: Settings -->
+            <div class="mb-8">
+                <label for="passing-grade" class="block text-lg font-semibold text-gray-700 mb-2">2. Set Passing Grade</label>
+                <p class="text-sm text-gray-500 mb-3">Any grade <span class="font-bold">below</span> this value will be counted as failing.</p>
+                <input type="number" id="passing-grade" value="65" class="w-32 p-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                
+                <!-- (NEW) Download Template Link -->
+                <div class="mt-4">
+                    <a href="#" id="download-template" class="text-blue-600 hover:text-blue-800 hover:underline text-sm font-medium">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 inline-block -mt-1 mr-1">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.59L7.3 9.7a.75.75 0 00-1.1 1.02l3.25 3.5a.75.75 0 001.1 0l3.25-3.5a.75.75 0 10-1.1-1.02l-1.95 2.1V6.75z" clip-rule="evenodd" />
+                        </svg>
+                        Download CSV template
+                    </a>
+                </div>
+            </div>
+
+            <!-- Step 3: Generate -->
+            <div>
+                <button id="generate-btn" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-300 flex items-center justify-center">
+                    <svg id="icon-default" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 mr-2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                    </svg>
+                    <svg id="icon-loading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span id="btn-text">Generate Report in New Window</span>
+                </button>
+                <p id="status-msg" class="text-center text-red-500 mt-4 h-5"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- (REMOVED) Hidden element for PDF generation -->
+
+
+    <script>
+        // --- Globals ---
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const fileListDisplay = document.getElementById('file-list');
+        const passingGradeInput = document.getElementById('passing-grade');
+        const generateBtn = document.getElementById('generate-btn');
+        const statusMsg = document.getElementById('status-msg');
+        const downloadTemplateBtn = document.getElementById('download-template');
+        
+        // Button loading state elements
+        const iconDefault = document.getElementById('icon-default');
+        const iconLoading = document.getElementById('icon-loading');
+        const btnText = document.getElementById('btn-text');
+
+        let uploadedFiles = [];
+
+        // --- Drag and Drop Logic ---
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'text/csv' || f.name.endsWith('.csv'));
+            handleFiles(files);
+        });
+        fileInput.addEventListener('change', () => {
+            const files = Array.from(fileInput.files);
+            handleFiles(files);
+        });
+
+        function handleFiles(files) {
+            uploadedFiles = files;
+            if (uploadedFiles.length > 0) {
+                fileListDisplay.innerHTML = `<strong>Selected files:</strong> ${uploadedFiles.map(f => f.name).join(', ')}`;
+                statusMsg.textContent = '';
+            } else {
+                fileListDisplay.innerHTML = '';
+            }
+        }
+
+        // --- (NEW) Download Template Logic ---
+        downloadTemplateBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            
+            // Define CSV headers and one row of example data
+            const headers = "student_Id,Student_FirstName,Student_LastName,course_code,markingPeriod_Average";
+            const exampleRow = "200000001,John,Doe,MGS21,62.5";
+            const csvContent = `${headers}\n${exampleRow}`;
+            
+            // Create a Blob
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            
+            // Create a link to trigger the download
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", "template.csv");
+            link.style.visibility = 'hidden';
+            
+            // Add to DOM, click, and remove
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        // --- Button Click ---
+        generateBtn.addEventListener('click', async () => {
+            if (uploadedFiles.length === 0) {
+                statusMsg.textContent = 'Error: Please upload at least one CSV file.';
+                return;
+            }
+
+            setLoadingState(true);
+            
+            try {
+                const passingGrade = parseFloat(passingGradeInput.value) || 65.0;
+                
+                // 1. Process data (with de-duplication)
+                const failingStudents = await processStudentData(uploadedFiles, passingGrade);
+                
+                // 2. Categorize
+                const categorizedLists = categorizeStudents(failingStudents);
+                
+                // 3. Generate HTML string
+                const reportHTML = generateReportHTML(categorizedLists, passingGrade);
+                
+                // 4. (MODIFIED) Open the HTML in a new window
+                const newWindow = window.open('', '_blank');
+                if (newWindow) {
+                    newWindow.document.write(reportHTML);
+                    newWindow.document.close();
+                    statusMsg.textContent = 'Report generated in new tab!';
+                    setTimeout(() => { statusMsg.textContent = ''; }, 3000);
+                } else {
+                    throw new Error('Could not open new window. Please disable pop-up blockers.');
+                }
+
+            } catch (error) {
+                console.error('Error during report generation:', error);
+                statusMsg.textContent = `Error: ${error.message}`;
+            } finally {
+                setLoadingState(false);
+            }
+        });
+
+        function setLoadingState(isLoading) {
+            if (isLoading) {
+                btnText.textContent = 'Processing...';
+                iconDefault.classList.add('hidden');
+                iconLoading.classList.remove('hidden');
+                generateBtn.disabled = true;
+                statusMsg.textContent = 'Parsing files and building report...';
+            } else {
+                btnText.textContent = 'Generate Report in New Window';
+                iconDefault.classList.remove('hidden');
+                iconLoading.classList.add('hidden');
+                generateBtn.disabled = false;
+                statusMsg.textContent = '';
+            }
+        }
+
+        // --- (MODIFIED) Core Logic (Ported from Python) ---
+
+        function processStudentData(files, passingGrade) {
+            const failingStudents = new Map();
+
+            const parseFile = (file) => {
+                return new Promise((resolve, reject) => {
+                    Papa.parse(file, {
+                        header: true,
+                        skipEmptyLines: true,
+                        step: (row) => {
+                            try {
+                                const data = row.data;
+                                const studentId = data.student_Id?.trim();
+                                if (!studentId) return;
+
+                                // (MODIFIED) Get the grade string. DO NOT default to '0'.
+                                const gradeStr = data.markingPeriod_Average?.trim();
+
+                                // (NEW) Skip if gradeStr is empty, null, or undefined
+                                if (!gradeStr) {
+                                    return;
+                                }
+
+                                const grade = parseFloat(gradeStr);
+
+                                if (isNaN(grade)) return; // Skip if grade is not a number
+
+                                if (grade < passingGrade) {
+                                    const firstName = data.Student_FirstName?.trim() || '';
+                                    const lastName = data.Student_LastName?.trim() || '';
+                                    const studentName = `${firstName} ${lastName}`;
+                                    const courseCode = data.course_code?.trim() || 'N/A';
+
+                                    // 1. Ensure the student is in our main map
+                                    if (!failingStudents.has(studentId)) {
+                                        failingStudents.set(studentId, {
+                                            name: studentName,
+                                            courses: {} // Use an object for de-duplication
+                                        });
+                                    }
+
+                                    // 2. (MODIFIED) Add or overwrite the grade for this course.
+                                    // This automatically handles duplicates.
+                                    failingStudents.get(studentId).courses[courseCode] = grade;
+                                }
+                            } catch (e) {
+                                console.warn('Skipping row due to error:', e, row.data);
+                            }
+                        },
+                        complete: () => resolve(),
+                        error: (err) => reject(err)
+                    });
+                });
+            };
+
+            const allPromises = files.map(parseFile);
+            return Promise.all(allPromises).then(() => failingStudents);
+        }
+
+        function categorizeStudents(failingStudents) {
+            const priorityLists = {
+                High: [],
+                Medium: [],
+                Low: []
+            };
+
+            failingStudents.forEach((data, studentId) => {
+                // (MODIFIED) Get fail count from the number of keys in the courses object
+                const failCount = Object.keys(data.courses).length;
+                if (failCount === 0) return;
+
+                // (MODIFIED) Convert the courses object back into a list for sorting
+                const coursesList = Object.entries(data.courses).map(([code, gr]) => {
+                    return { course: code, grade: gr };
+                });
+                // Sort courses by grade (lowest first)
+                coursesList.sort((a, b) => a.grade - b.grade);
+
+                const studentEntry = {
+                    id: studentId,
+                    name: data.name,
+                    fail_count: failCount,
+                    courses: coursesList // Use the new sorted list
+                };
+
+                if (failCount >= 5) {
+                    priorityLists.High.push(studentEntry);
+                } else if (failCount >= 3) {
+                    priorityLists.Medium.push(studentEntry);
+                } else {
+                    priorityLists.Low.push(studentEntry);
+                }
+            });
+
+            // Sort each list by fail count (highest first)
+            for (const priority in priorityLists) {
+                priorityLists[priority].sort((a, b) => b.fail_count - a.fail_count);
+            }
+            
+            return priorityLists;
+        }
+
+        function generateReportHTML(priorityLists, passingGrade) {
+            // (MODIFIED) This now builds a *complete* HTML document
+            // for the new window, including styles and a print button.
+            let html = `
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Student Priority Report</title>
+                <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 40px; }
+                    h1 { font-size: 24px; font-weight: bold; margin-bottom: 5px; color: #111827; }
+                    h2 { font-size: 20px; font-weight: bold; margin-top: 30px; margin-bottom: 10px; color: #1f2937; border-bottom: 2px solid #e5e7eb; padding-bottom: 5px; }
+                    h3 { font-size: 16px; font-weight: bold; margin-top: 20px; margin-bottom: 10px; color: #374151; }
+                    p { font-size: 14px; color: #4b5563; margin-bottom: 15px; }
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+                    th, td { border: 1px solid #d1d5db; padding: 8px 12px; text-align: left; font-size: 14px; }
+                    th { background-color: #f3f4f6; font-weight: bold; color: #1f2937; }
+                    tr:nth-child(even) { background-color: #f9fafb; }
+                    .page-break { page-break-after: always; }
+                    .header-info { font-size: 12px; color: #6b7281; }
+                    
+                    /* Print-specific styles */
+                    @media print {
+                        #print-controls {
+                            display: none; /* Hide the print button when printing */
+                        }
+                        body { margin: 20px; } /* Reduce margins for print */
+                    }
+
+                    /* Button styles */
+                    #print-btn {
+                        background-color: #2563eb;
+                        color: white;
+                        font-weight: bold;
+                        padding: 12px 20px;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-size: 16px;
+                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                        transition: background-color 0.3s ease;
+                    }
+                    #print-btn:hover {
+                        background-color: #1d4ed8;
+                    }
+                    #print-controls {
+                        margin-bottom: 30px;
+                        padding: 20px;
+                        background-color: #f9fafb;
+                        border-radius: 8px;
+                        border: 1px solid #e5e7eb;
+                        text-align: center;
+                    }
+                </style>
+            </head>
+            <body>
+                <!-- (NEW) Print controls area -->
+                <div id="print-controls">
+                    <p style="font-size: 16px; font-weight: 500; margin-bottom: 15px;">Report generated successfully.</p>
+                    <button id="print-btn" onclick="window.print()">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 20px; height: 20px; display: inline-block; margin-right: 8px; vertical-align: middle;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.23a1.125 1.125 0 01-1.12-1.227L6.34 18m11.32 0c.09.263.16.526.21.791A1.125 1.125 0 0117.25 21H6.75a1.125 1.125 0 01-1.01-1.409c.05-.265.12-.528.21-.79m0 0A42.15 42.15 0 0112 13.829c2.318 0 4.54.386 6.58.991m-13.16 0A42.15 42.15 0 0112 13.829c-2.318 0-4.54.386-6.58.991M12 6a3 3 0 110-6 3 3 0 010 6zm-7.071 5.929A3 3 0 014.07 15H2.25A2.25 2.25 0 010 12.75V11.5a3 3 0 013-3h.071c.07-.53.18-1.05.32-1.571m13.2 0c.14.52.25 1.04.32 1.571h.071a3 3 0 013 3v1.25a2.25 2.25 0 01-2.25 2.25h-1.82c.002-.132.002-.264 0-.396a3 3 0 011.07-2.121M12 6a3 3 0 110-6 3 3 0 010 6zm-7.071 5.929A3 3 0 014.07 15H2.25A2.25 2.25 0 010 12.75V11.5a3 3 0 013-3h.071c.07-.53.18-1.05.32-1.571m13.2 0c.14.52.25 1.04.32 1.571h.071a3 3 0 013 3v1.25a2.25 2.25 0 01-2.25 2.25h-1.82c.002-.132.002-.264 0-.396a3 3 0 011.07-2.121" />
+                        </svg>
+                        Print / Save as PDF
+                    </button>
+                    <p style="font-size: 12px; color: #6b7281; margin-top: 15px;">Click the button above and choose "Save as PDF" in your browser's print dialog.</p>
+                </div>
+
+                <!-- Report Content Wrapper -->
+                <div id="pdf-content-wrapper">
+                    <h1>Mandated Tutoring Priority Report</h1>
+                    <p class="header-info">
+                        Generated on: ${new Date().toLocaleString()}<br>
+                        Failing grade defined as: < ${passingGrade}
+                    </p>
+
+                    <!-- High Priority -->
+                    <h2>HIGH PRIORITY (5+ Failing Courses)</h2>
+                    <p><strong>${priorityLists.High.length} students</strong> - In danger of not being promoted.</p>
+                    ${renderStudentTable(priorityLists.High)}
+
+                    <div class="page-break"></div>
+
+                    <!-- Medium Priority -->
+                    <h2>MEDIUM PRIORITY (3-4 Failing Courses)</h2>
+                    <p><strong>${priorityLists.Medium.length} students</strong></p>
+                    ${renderStudentTable(priorityLists.Medium)}
+
+                    <div class="page-break"></div>
+
+                    <!-- Low Priority -->
+                    <h2>LOW PRIORITY (1-2 Failing Courses)</h2>
+                    <p><strong>${priorityLists.Low.length} students</strong></p>
+                    ${renderStudentTable(priorityLists.Low)}
+                </div>
+            </body>
+            </html>
+            `;
+            return html;
+        }
+
+        function renderStudentTable(students) {
+            if (students.length === 0) {
+                return "<p>None</p>";
+            }
+            let tableHTML = '';
+            students.forEach(student => {
+                tableHTML += `
+                    <h3>${student.name} (ID: ${student.id}) - Failing ${student.fail_count} Courses</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Course Code</th>
+                                <th>Grade</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${student.courses.map(course => `
+                                <tr>
+                                    <td>${course.course}</td>
+                                    <td>${course.grade.toFixed(2)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            });
+            return tableHTML;
+        }
+
+        // (REMOVED) triggerPDFDownload function
+        // This function is no longer needed as we are using window.open and window.print
+
+    </script>
+</body>
+</html>
+
+
+
+
